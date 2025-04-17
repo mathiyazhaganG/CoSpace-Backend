@@ -92,6 +92,16 @@ exports.cancelBooking = async (req, res) => {
 exports.createSpaceWithSeats = async (req, res) => {
 	try {
 	  const { spaceName, location, amenities, description, images, TotalSeats } = req.body;
+	  if(!spaceName || !location || !amenities || !description || !images || !TotalSeats) {
+		return res.status(400).json({ message: 'All fields are required' });
+	  }
+	  if (TotalSeats <= 0) {
+		return res.status(400).json({ message: ' Enter Valid TotalSeats ' });
+	  }
+	  if(spaceName.trim() == 0 || location.trim() == 0 || description.trim() == 0|| images[0].trim() == 0 || amenities[0].trim() == 0) {
+		return res.status(400).json({ message: 'Invalid Data' });
+	  }
+	 
   
 	  const space = new Space({
 		spaceName,
