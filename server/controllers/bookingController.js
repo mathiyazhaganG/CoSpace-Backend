@@ -4,36 +4,47 @@ const User = require('../models/User');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
+const Space = require('../models/Space');
+const validator = require('validator');
 
-exports.bookSeat= async (req, res) => {
-	try {
-		const { seatId, userId, date, timeSlot } = req.body;
-		const existingBooking = await Booking.findOne({ seat: seatId, date, timeSlot });
-		if (existingBooking) {
-			return res.status(400).json({ message: "Seat is already booked for this time slot" });
-		}
-		const booking = new Booking({
-			seat: seatId,
-			user: userId,
-			date,
-			timeSlot,
-		});
-		await booking.save();
-		res.status(201).json({ message: "Seat booked successfully", booking });
-	} catch (error) {
-		console.error("Error booking seat:", error);
-		res.status(500).json({ message: "Error booking seat" });
-	}
+
+exports.bookSeat = async (req, res) => {
+  try {
+    const { seatId, userId, date, timeSlot, spaceId } = req.body;
+
+    // Validate required fields
+    if (!seatId || !userId || !date || !timeSlot || !spaceId) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    // Check if the seat is already booked for the given time slot
+    const existingBooking = await Booking.findOne({ seat: seatId, date, timeSlot, space: spaceId });
+    if (existingBooking) {
+      return res.status(200).json({ message: "Seat is already booked for this time slot" });
+    }
+
+    // Create a new booking
+    const booking = new Booking({
+      seat: seatId,
+      user: userId,
+      date,
+      timeSlot,
+      space: spaceId,
+    });
+
+    await booking.save();
+    res.status(201).json({ message: "Seat booked successfully", booking });
+  } catch (error) {
+    console.error("Error booking seat:", error);
+    res.status(500).json({ message: "Error booking seat" });
+  }
 };
 
 exports.getUserBookings = async (req, res) => {
 	try {
 		// const userId = req.user._id; 
 		const { userId } = req.params; 
-		const bookings = await Booking.find({ user: userId }).populate('seat');
-		if (!bookings || bookings.length === 0) {
-			return res.status(404).json({ message: "No bookings found for this user" });
-		}
+		const bookings = await Booking.find({ user: userId }).populate('seat').populate('space');
 		res.status(200).json(bookings);
 	}catch (error) {
 		console.error("Error fetching user bookings:", error);
@@ -45,9 +56,6 @@ exports.getUserBookings = async (req, res) => {
 exports.getAllSeats = async (req, res) => {
 	try {
 		const seats = await Seat.find({});
-		if (!seats || seats.length === 0) {
-			return res.status(404).json({ message: "No seats found" });
-		}
 		res.status(200).json(seats);
 	} catch (error) {
 		console.error("Error fetching all seats:", error);
@@ -57,10 +65,8 @@ exports.getAllSeats = async (req, res) => {
 };
 exports.getBookings = async (req, res) => {
 	try {
-		const bookings = await Booking.find({}).populate('seat').populate('user');
-		if (!bookings || bookings.length === 0) {
-			return res.status(404).json({ message: "No bookings found" });
-		}
+		const bookings = await Booking.find({}).populate('seat').populate('user').populate('space');
+		
 		res.status(200).json(bookings);
 		
 	} catch (error) {
@@ -83,52 +89,106 @@ exports.cancelBooking = async (req, res) => {
 		
 	}
 }
-exports.registerUser = async (req, res) => {
+exports.createSpaceWithSeats = async (req, res) => {
 	try {
-		const { name,email } = req.body;
-		const existingUser = await User.findOne({ email });
-		if (existingUser) {
-			return res.status(400).json({ message: "User already exists" });
-		}
-		const user = new User({
-			name,
-			email,
-			password: bcrypt.hashSync(req.body.password, 8), 
-		});
-		await user.save();
-		const token = jwt.sign(
-			{ userId: user._id, email: user.email },
-			process.env.JWT_SECRET,
-			{ expiresIn: '1d' } 
-		  );
-		res.cookie("token", token);
-		res.status(201).json({ message: "User registered successfully", user });
-		
+	  const { spaceName, location, amenities, description, images, TotalSeats } = req.body;
+  
+	  const space = new Space({
+		spaceName,
+		location,
+		amenities,
+		description,
+		images,
+		TotalSeats,
+		seats: [] // will push later
+	  });
+  
+	  // Step 2: Create each seat and link it to this space
+	  for (let i = 1; i <= TotalSeats; i++) {
+		const seatNumber = `S-${i}`;
+		const seat = await Seat.create({ seatNumber, space: space._id });
+		space.seats.push(seat._id);
+	  }
+  
+	  await space.save();
+  
+	  res.status(201).json({ message: 'Space created with seats', space });
 	} catch (error) {
-		console.error("Error registering user:", error);
-		res.status(500).json({ message: "Error registering user" });
-		
+	  console.error(error);
+	  res.status(500).json({ message: 'Server error while creating space with seats' });
 	}
-}
-exports.loginUser = async (req, res) => {
-	try {
-		const { email, password } = req.body;
-		const user = await User.findOne({ email });
-		const match = await bcrypt.compare(password, user.password);
-		if (!user || !match) {
-			return res.status(401).json({ message: "Invalid email or password" });
-		}
-		const token = jwt.sign(
-			{ userId: user._id, email: user.email },
-			process.env.JWT_SECRET,
-			{ expiresIn: '1d' } 
-		  );
-		res.cookie("token", token);
-		res.status(200).json({ message: "User logged in successfully", user });
-		
-	} catch (error) {
-		console.error("Error logging in user:", error);
-		res.status(500).json({ message: "Error logging in user" });
-		
-	}
+  };
+  
+
+exports.getAllSpaces = async (req, res) => {
+  try {
+    const spaces = await Space.find({}).populate('seats'); // Populate seats if needed
+    res.status(200).json(spaces);
+  } catch (error) {
+    console.error("Error fetching all spaces:", error);
+    res.status(500).json({ message: "Error fetching all spaces" });
+  }
 };
+
+exports.getSpaces = async (req, res) => {
+	try {
+		const { spaceId } = req.params;
+	  const spaces = await Space.find({ _id: spaceId }).populate('seats'); // Populate seats if needed
+	  res.status(200).json(spaces);
+	} catch (error) {
+	  console.error("Error fetching all spaces:", error);
+	  res.status(500).json({ message: "Error fetching all spaces" });
+	}
+  };
+  
+
+  exports.availableSeats = async (req, res) => {
+	const { spaceId, date, timeSlot } = req.query;
+  
+	if (!spaceId || !date || !timeSlot) {
+	  return res.status(400).json({ message: 'All fields are required' });
+	}
+  
+	try {
+	  // ✅ Step 1: Find all booked seat IDs for this space, date, and timeSlot
+	  const bookedSeats = await Booking.find({
+		space: spaceId,
+		date,
+		timeSlot
+	  }).distinct('seat'); // ✅ correct field name
+  
+	  // ✅ Step 2: Get all seats in the space that are NOT booked
+	  const availableSeats = await Seat.find({
+		space: spaceId,
+		_id: { $nin: bookedSeats }
+	  });
+  
+	  res.status(200).json(availableSeats);
+	} catch (err) {
+	  console.error('Error fetching available seats:', err);
+	  res.status(500).json({ message: 'Server error' });
+	}
+  };
+  
+  
+  exports.checkAvailability = async (req, res) => {
+	try {
+	  const { seatId, date, timeSlot, spaceId } = req.query;
+  
+	  if (!seatId || !date || !timeSlot || !spaceId) {
+		return res.status(400).json({ message: "All fields are required" });
+	  }
+  
+	  const existingBooking = await Booking.findOne({ seat: seatId, date, timeSlot, space: spaceId });
+  
+	  if (existingBooking) {
+		return res.status(200).json({ available: false, message: "Seat is already booked" });
+	  }
+  
+	  res.status(200).json({ available: true, message: "Seat is available" });
+	} catch (error) {
+	  console.error("Error checking seat availability:", error);
+	  res.status(500).json({ message: "Internal server error" });
+	}
+  };
+  
