@@ -3,7 +3,7 @@ const User = require("../models/User");
 
 const AdminAuth = async (req, res, next) => {
   try {
-    console.log("Cookies received:", req.cookies); // Debugging log
+    console.log("Cookies received:", req.cookies); 
     const { token } = req.cookies;
 
     if (!token) {

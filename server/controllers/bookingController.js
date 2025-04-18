@@ -22,6 +22,22 @@ exports.bookSeat = async (req, res) => {
     if (existingBooking) {
       return res.status(200).json({ message: "Seat is already booked for this time slot" });
     }
+	
+	if (!mongoose.Types.ObjectId.isValid(seatId)) {
+		return res.status(400).json({ message: "Invalid seat ID" });
+	}
+	if (!mongoose.Types.ObjectId.isValid(userId)) {
+		return res.status(400).json({ message: "Invalid user ID" });
+	}
+	if (!mongoose.Types.ObjectId.isValid(spaceId)) {
+		return res.status(400).json({ message: "Invalid space ID" });
+	}
+	if (!validator.isDate(date)) {
+		return res.status(400).json({ message: "Invalid date format" });
+	}
+	if (!['9AM - 12PM', '1PM - 4PM', '5PM - 8PM'].includes(timeSlot)) {
+		return res.status(400).json({ message: 'Invalid time slot' });
+	  }
 
     // Create a new booking
     const booking = new Booking({

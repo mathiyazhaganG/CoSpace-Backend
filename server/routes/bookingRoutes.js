@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const controller = require('../controllers/bookingController');
 const userController = require('../controllers/userController');
-const UserAuth = require('../middleware/UserAuth .js');
+const UserAuth = require('../middleware/UserAuth.js');
 const AdminAuth= require('../middleware/AdminAuth.js')
 
 router.post('/book',UserAuth ,controller.bookSeat);
