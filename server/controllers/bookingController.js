@@ -7,17 +7,22 @@ const bcrypt = require('bcrypt');
 const Space = require('../models/Space');
 const validator = require('validator');
 
+
+const slotMap = {
+  'Full Day': ['9AM - 12PM', '1PM - 4PM', '5PM - 8PM', 'Full Day'],
+  '9AM - 12PM': ['9AM - 12PM', 'Full Day'],
+  '1PM - 4PM': ['1PM - 4PM', 'Full Day'],
+  '5PM - 8PM': ['5PM - 8PM', 'Full Day'],
+};
+
+
 exports.bookSeat = async (req, res) => {
   try {
     const { seatId, userId, date, timeSlot, spaceId } = req.body;
 
+    // Validate inputs
     if (!seatId || !userId || !date || !timeSlot || !spaceId) {
       return res.status(400).json({ message: "All fields are required" });
-    }
-
-    const existingBooking = await Booking.findOne({ seat: seatId, date, timeSlot, space: spaceId });
-    if (existingBooking) {
-      return res.status(200).json({ message: "Seat is already booked for this time slot" });
     }
 
     if (!mongoose.Types.ObjectId.isValid(seatId)) {
@@ -32,10 +37,27 @@ exports.bookSeat = async (req, res) => {
     if (!validator.isDate(date)) {
       return res.status(400).json({ message: "Invalid date format" });
     }
-    if (!['9AM - 12PM', '1PM - 4PM', '5PM - 8PM'].includes(timeSlot)) {
+
+    if (!['9AM - 12PM', '1PM - 4PM', '5PM - 8PM','Full Day'].includes(timeSlot)) {
       return res.status(400).json({ message: 'Invalid time slot' });
     }
 
+    
+    const timeSlotsToCheck = slotMap[timeSlot];
+
+   
+    const existingBooking = await Booking.findOne({
+      seat: seatId,
+      date,
+      timeSlot: { $in: timeSlotsToCheck },
+      space: spaceId
+    });
+
+    if (existingBooking) {
+      return res.status(200).json({ message: "Seat is already booked for this time slot" });
+    }
+
+    // Create new booking
     const booking = new Booking({
       seat: seatId,
       user: userId,
@@ -51,6 +73,7 @@ exports.bookSeat = async (req, res) => {
     res.status(500).json({ message: "Error booking seat" });
   }
 };
+
 
 exports.getUserBookings = async (req, res) => {
   try {
@@ -161,12 +184,18 @@ exports.availableSeats = async (req, res) => {
   if (!spaceId || !date || !timeSlot) {
     return res.status(400).json({ message: 'All fields are required' });
   }
+  
+  const timeSlotsToCheck = slotMap[timeSlot];
+  if (!timeSlotsToCheck) {
+    return res.status(400).json({ message: 'Invalid time slot' });
+  }
+
 
   try {
     const bookedSeats = await Booking.find({
       space: spaceId,
       date,
-      timeSlot
+      timeSlot: { $in: timeSlotsToCheck },
     }).distinct('seat');
 
     const availableSeats = await Seat.find({
@@ -189,10 +218,18 @@ exports.checkAvailability = async (req, res) => {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    const existingBooking = await Booking.findOne({ seat: seatId, date, timeSlot, space: spaceId });
+    const timeSlotsToCheck = slotMap[timeSlot];
+
+   
+    const existingBooking = await Booking.findOne({
+      seat: seatId,
+      date,
+      timeSlot: { $in: timeSlotsToCheck },
+      space: spaceId
+    });
 
     if (existingBooking) {
-      return res.status(200).json({ available: false, message: "Seat is already booked" });
+      return res.status(200).json({ message: "Seat is already booked for this time slot" });
     }
 
     res.status(200).json({ available: true, message: "Seat is available" });
