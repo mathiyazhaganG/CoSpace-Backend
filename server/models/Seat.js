@@ -4,7 +4,7 @@ const SeatSchema = new mongoose.Schema({
   seatNumber: String,
   isAvailable: {
     type: Boolean,
-    default: true // Initially, seats are available
+    default: true 
 },
   
   space: {
